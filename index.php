@@ -21,7 +21,8 @@ $stmt = $pdo->query("
 
 $surveys = $stmt->fetchAll();
 
-function formatRemainingTime(string $expiresAtRaw): string {
+function formatRemainingTime(string $expiresAtRaw): string
+{
     $now = new DateTimeImmutable('now');
     $expiresAt = new DateTimeImmutable($expiresAtRaw);
 
@@ -44,11 +45,17 @@ function formatRemainingTime(string $expiresAtRaw): string {
 ?>
 <!DOCTYPE html>
 <html lang="de">
+
 <head>
     <meta charset="UTF-8">
     <title>Aktive Umfragen</title>
     <style>
-        body { font-family: system-ui, sans-serif; margin: 2rem; max-width: 1000px; }
+        body {
+            font-family: system-ui, sans-serif;
+            margin: 2rem;
+            max-width: 1000px;
+        }
+
         .topbar {
             display: flex;
             justify-content: space-between;
@@ -57,6 +64,7 @@ function formatRemainingTime(string $expiresAtRaw): string {
             margin-bottom: 2rem;
             flex-wrap: wrap;
         }
+
         .button {
             display: inline-block;
             padding: 0.65rem 1rem;
@@ -65,27 +73,42 @@ function formatRemainingTime(string $expiresAtRaw): string {
             text-decoration: none;
             border-radius: 8px;
         }
+
         table {
             border-collapse: collapse;
             width: 100%;
         }
-        th, td {
+
+        th,
+        td {
             border: 1px solid #ddd;
             padding: 0.75rem;
             text-align: left;
             vertical-align: top;
         }
-        th { background: #f5f5f5; }
-        .muted { color: #666; font-size: 0.95rem; }
+
+        th {
+            background: #f5f5f5;
+        }
+
+        .muted {
+            color: #666;
+            font-size: 0.95rem;
+        }
     </style>
 </head>
+
 <body>
     <div class="topbar">
         <div>
             <h1>Aktive Umfragen</h1>
             <div class="muted">Öffentliche Übersicht laufender Abstimmungen</div>
         </div>
-        <a class="button" href="create.php">Neue Umfrage anlegen</a>
+        <div style="display:flex; gap:0.75rem; flex-wrap:wrap;">
+            <a class="button" href="create.php">Neue Umfrage anlegen</a>
+            <a class="button" href="admin.php">Admin</a>
+        </div>
+
     </div>
 
     <?php if (!$surveys): ?>
@@ -110,8 +133,8 @@ function formatRemainingTime(string $expiresAtRaw): string {
                                 gestartet: <?php echo htmlspecialchars($survey['created_at']); ?>
                             </div>
                         </td>
-                        <td><?php echo (int)$survey['total_votes']; ?></td>
-                        <td><?php echo (int)$survey['expected_votes']; ?></td>
+                        <td><?php echo (int) $survey['total_votes']; ?></td>
+                        <td><?php echo (int) $survey['expected_votes']; ?></td>
                         <td><?php echo htmlspecialchars(formatRemainingTime($survey['expires_at'])); ?></td>
                         <td>
                             <a href="survey.php?sid=<?php echo urlencode($survey['public_id']); ?>">
@@ -124,4 +147,5 @@ function formatRemainingTime(string $expiresAtRaw): string {
         </table>
     <?php endif; ?>
 </body>
+
 </html>
