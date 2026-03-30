@@ -1,6 +1,6 @@
 <?php
 // create_survey.php
-require __DIR__ . 'private/config.php';
+require __DIR__ . '/private/config.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     header('Location: create.php');
@@ -9,7 +9,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 
 $question = trim($_POST['question'] ?? '');
 $choicesRaw = trim($_POST['choices'] ?? '');
-$expectedVotes = (int)($_POST['expected_votes'] ?? 0);
+$expectedVotes = (int) ($_POST['expected_votes'] ?? 0);
 $email = trim($_POST['email'] ?? '');
 
 $errors = [];
@@ -46,12 +46,13 @@ if ($errors) {
 }
 
 // public_id erzeugen
-function generatePublicId(): string {
+function generatePublicId(): string
+{
     return bin2hex(random_bytes(8));
 }
 
 // 4-stelliger PIN
-$pin = str_pad((string)random_int(0, 9999), 4, '0', STR_PAD_LEFT);
+$pin = str_pad((string) random_int(0, 9999), 4, '0', STR_PAD_LEFT);
 
 // PIN hashen (bcrypt/DEFAULT)
 $pinHash = password_hash($pin, PASSWORD_DEFAULT); // [web:9]
@@ -77,7 +78,7 @@ try {
         ':expires_at' => $expiresAt->format('Y-m-d H:i:s'),
     ]);
 
-    $surveyId = (int)$pdo->lastInsertId();
+    $surveyId = (int) $pdo->lastInsertId();
 
     $stmtChoice = $pdo->prepare('
         INSERT INTO choices (survey_id, choice_text) VALUES (:survey_id, :choice_text)
@@ -90,10 +91,15 @@ try {
     }
 
     $pdo->commit();
-    $surveyUrl = $baseUrl . '/survey.php?sid=' . urlencode($publicId);
+} catch (Throwable $e) {
+    $pdo->rollBack();
+    die('Fehler beim Speichern der Umfrage: ' . htmlspecialchars($e->getMessage()));
+}
+$surveyUrl = $baseUrl . '/survey.php?sid=' . urlencode($publicId);
 
-    $subject = 'Deine Umfrage wurde erstellt';
-    $message =
+// Bestätigungsmail an den Ersteller
+$subject = 'Deine Umfrage wurde erstellt';
+$message =
     "Hallo,\n\n" .
     "deine Umfrage wurde erfolgreich angelegt.\n\n" .
     "Frage: " . $question . "\n" .
@@ -102,42 +108,47 @@ try {
     "Gültig bis: " . $expiresAt->format('Y-m-d H:i:s') . "\n\n" .
     "Bitte bewahre diese E-Mail gut auf.\n";
 
-    $headers = [
-    'From: ' . $fromEmail,
-    'Reply-To: ' . $fromEmail,
-    'Content-Type: text/plain; charset=UTF-8',
-    'X-Mailer: PHP/' . phpversion(),
-];
+$headers =
+    'From: ' . $fromEmail . "\r\n" .
+    'Reply-To: ' . $fromEmail . "\r\n" .
+    'Content-Type: text/plain; charset=UTF-8' . "\r\n" .
+    'X-Mailer: PHP/' . phpversion();
 
-@mail($email, $subject, $message, implode("\r\n", $headers));
-
-} catch (Throwable $e) {
-    $pdo->rollBack();
-    die('Fehler beim Speichern der Umfrage: ' . htmlspecialchars($e->getMessage()));
-}
-
+@mail($email, $subject, $message, $headers);
 ?>
 <!DOCTYPE html>
 <html lang="de">
+
 <head>
     <meta charset="UTF-8">
     <title>Umfrage erstellt</title>
     <style>
-        body { font-family: system-ui, sans-serif; margin: 2rem; max-width: 700px; }
-        code { background: #f4f4f4; padding: 0.2rem 0.4rem; }
+        body {
+            font-family: system-ui, sans-serif;
+            margin: 2rem;
+            max-width: 700px;
+        }
+
+        code {
+            background: #f4f4f4;
+            padding: 0.2rem 0.4rem;
+        }
     </style>
 </head>
+
 <body>
-<h1>Umfrage erfolgreich erstellt</h1>
+    <h1>Umfrage erfolgreich erstellt</h1>
 
-<p><strong>Umfragelink (an Teilnehmende weitergeben):</strong></p>
-<p><code><?php echo htmlspecialchars($surveyUrl); ?></code></p>
+    <p><strong>Umfragelink (an Teilnehmende weitergeben):</strong></p>
+    <p><code><?php echo htmlspecialchars($surveyUrl); ?></code></p>
 
-<p><strong>PIN (4-stellig, zum Entsperren der Umfrage):</strong></p>
-<p><code><?php echo htmlspecialchars($pin); ?></code></p>
+    <p><strong>PIN (4-stellig, zum Entsperren der Umfrage):</strong></p>
+    <p><code><?php echo htmlspecialchars($pin); ?></code></p>
 
-<p>Bitte speichere den PIN sicher. Er wird aus Sicherheitsgründen nur hier im Klartext angezeigt.</p>
+    <p>Bitte speichere den PIN sicher. Er wird aus Sicherheitsgründen nur hier im Klartext angezeigt.</p>
 
-<p><a href="create.php">Weitere Umfrage anlegen</a></p>
+    <p><a href="create.php">Weitere Umfrage anlegen</a></p>
+    <p><a href="index.php">Zur Übersicht aller laufenden Umfragen</a></p>
 </body>
+
 </html>
