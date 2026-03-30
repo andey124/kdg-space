@@ -3,7 +3,7 @@
 require __DIR__ . 'private/config.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    header('Location: index.php');
+    header('Location: create.php');
     exit;
 }
 
@@ -118,6 +118,6 @@ $surveyUrl = $baseUrl . '/survey.php?sid=' . urlencode($publicId);
 
 <p>Bitte speichere den PIN sicher. Er wird aus Sicherheitsgründen nur hier im Klartext angezeigt.</p>
 
-<p><a href="index.php">Weitere Umfrage anlegen</a></p>
+<p><a href="create.php">Weitere Umfrage anlegen</a></p>
 </body>
 </html>
