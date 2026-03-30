@@ -3,7 +3,7 @@
 require __DIR__ . 'private/config.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    header('Location: index.php');
+    header('Location: create.php');
     exit;
 }
 
@@ -90,12 +90,32 @@ try {
     }
 
     $pdo->commit();
+    $surveyUrl = $baseUrl . '/survey.php?sid=' . urlencode($publicId);
+
+    $subject = 'Deine Umfrage wurde erstellt';
+    $message =
+    "Hallo,\n\n" .
+    "deine Umfrage wurde erfolgreich angelegt.\n\n" .
+    "Frage: " . $question . "\n" .
+    "Umfragelink: " . $surveyUrl . "\n" .
+    "PIN zum Entsperren: " . $pin . "\n" .
+    "Gültig bis: " . $expiresAt->format('Y-m-d H:i:s') . "\n\n" .
+    "Bitte bewahre diese E-Mail gut auf.\n";
+
+    $headers = [
+    'From: ' . $fromEmail,
+    'Reply-To: ' . $fromEmail,
+    'Content-Type: text/plain; charset=UTF-8',
+    'X-Mailer: PHP/' . phpversion(),
+];
+
+@mail($email, $subject, $message, implode("\r\n", $headers));
+
 } catch (Throwable $e) {
     $pdo->rollBack();
     die('Fehler beim Speichern der Umfrage: ' . htmlspecialchars($e->getMessage()));
 }
 
-$surveyUrl = $baseUrl . '/survey.php?sid=' . urlencode($publicId);
 ?>
 <!DOCTYPE html>
 <html lang="de">
@@ -118,6 +138,6 @@ $surveyUrl = $baseUrl . '/survey.php?sid=' . urlencode($publicId);
 
 <p>Bitte speichere den PIN sicher. Er wird aus Sicherheitsgründen nur hier im Klartext angezeigt.</p>
 
-<p><a href="index.php">Weitere Umfrage anlegen</a></p>
+<p><a href="create.php">Weitere Umfrage anlegen</a></p>
 </body>
 </html>
