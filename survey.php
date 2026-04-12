@@ -203,6 +203,16 @@ if ($isResultVisible) {
             cursor: pointer;
         }
 
+        .back-link {
+            display: inline-block;
+            margin-bottom: 1rem;
+            padding: 0.5rem 0.9rem;
+            background: #111;
+            color: #fff;
+            text-decoration: none;
+            border-radius: 6px;
+        }
+
         table {
             border-collapse: collapse;
             width: 100%;
@@ -223,6 +233,8 @@ if ($isResultVisible) {
 </head>
 
 <body>
+    <a class="back-link" href="index.php">Zur Übersicht</a>
+
     <h1><?php echo htmlspecialchars($survey['question']); ?></h1>
     <div class="meta">
         Gültig bis: <?php echo htmlspecialchars($survey['expires_at']); ?><br>

@@ -51,6 +51,11 @@ function generatePublicId(): string
     return bin2hex(random_bytes(8));
 }
 
+function generateDeleteToken(string $publicId, string $secret): string
+{
+    return hash_hmac('sha256', 'delete-survey:' . $publicId, $secret);
+}
+
 // 4-stelliger PIN
 $pin = str_pad((string) random_int(0, 9999), 4, '0', STR_PAD_LEFT);
 
@@ -96,6 +101,8 @@ try {
     die('Fehler beim Speichern der Umfrage: ' . htmlspecialchars($e->getMessage()));
 }
 $surveyUrl = $baseUrl . '/survey.php?sid=' . urlencode($publicId);
+$deleteToken = generateDeleteToken($publicId, $adminPassword);
+$deleteUrl = $baseUrl . '/delete_survey.php?sid=' . urlencode($publicId) . '&token=' . urlencode($deleteToken);
 
 // Bestätigungsmail an den Ersteller
 $subject = 'Deine Umfrage wurde erstellt';
@@ -104,6 +111,8 @@ $message =
     "deine Umfrage wurde erfolgreich angelegt.\n\n" .
     "Frage: " . $question . "\n" .
     "Umfragelink: " . $surveyUrl . "\n" .
+    "Löschlink (einzigartig): " . $deleteUrl . "\n" .
+    "Nach dem Öffnen muss die Löschung noch einmal bestätigt werden.\n" .
     "PIN zum Entsperren: " . $pin . "\n" .
     "Gültig bis: " . $expiresAt->format('Y-m-d H:i:s') . "\n\n" .
     "Bitte bewahre diese E-Mail gut auf.\n";
@@ -144,6 +153,10 @@ $headers =
 
     <p><strong>PIN (4-stellig, zum Entsperren der Umfrage):</strong></p>
     <p><code><?php echo htmlspecialchars($pin); ?></code></p>
+
+    <p><strong>Einzigartiger Löschlink:</strong></p>
+    <p><code><?php echo htmlspecialchars($deleteUrl); ?></code></p>
+    <p>Nach dem Öffnen muss die Löschung noch einmal mit „Ja, sicher löschen“ bestätigt werden.</p>
 
     <p>Bitte speichere den PIN sicher. Er wird aus Sicherheitsgründen nur hier im Klartext angezeigt.</p>
 
