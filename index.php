@@ -11,10 +11,13 @@ $stmt = $pdo->query("
         s.expected_votes,
         s.created_at,
         s.expires_at,
-        COUNT(v.id) AS total_votes
+        COUNT(v.id) AS total_votes,
+        CASE
+            WHEN COUNT(v.id) >= s.expected_votes OR s.expires_at <= NOW() THEN 1
+            ELSE 0
+        END AS is_closed
     FROM surveys s
     LEFT JOIN votes v ON v.survey_id = s.id
-    WHERE s.expires_at > NOW()
     GROUP BY s.id, s.public_id, s.question, s.expected_votes, s.created_at, s.expires_at
     ORDER BY s.created_at DESC
 ");
@@ -48,7 +51,7 @@ function formatRemainingTime(string $expiresAtRaw): string
 
 <head>
     <meta charset="UTF-8">
-    <title>Aktive Umfragen</title>
+    <title>Umfragen</title>
     <style>
         body {
             font-family: system-ui, sans-serif;
@@ -101,8 +104,8 @@ function formatRemainingTime(string $expiresAtRaw): string
 <body>
     <div class="topbar">
         <div>
-            <h1>Aktive Umfragen</h1>
-            <div class="muted">Öffentliche Übersicht laufender Abstimmungen</div>
+            <h1>Umfragen</h1>
+            <div class="muted">Öffentliche Übersicht aller Abstimmungen</div>
         </div>
         <div style="display:flex; gap:0.75rem; flex-wrap:wrap;">
             <a class="button" href="create.php">Neue Umfrage anlegen</a>
@@ -112,7 +115,7 @@ function formatRemainingTime(string $expiresAtRaw): string
     </div>
 
     <?php if (!$surveys): ?>
-        <p>Aktuell gibt es keine laufenden Umfragen.</p>
+        <p>Aktuell gibt es keine Umfragen.</p>
     <?php else: ?>
         <table>
             <thead>
@@ -120,7 +123,7 @@ function formatRemainingTime(string $expiresAtRaw): string
                     <th>Umfrage</th>
                     <th>Stimmen</th>
                     <th>Ziel</th>
-                    <th>Verbleibende Zeit</th>
+                    <th>Status</th>
                     <th>Öffnen</th>
                 </tr>
             </thead>
@@ -135,7 +138,13 @@ function formatRemainingTime(string $expiresAtRaw): string
                         </td>
                         <td><?php echo (int) $survey['total_votes']; ?></td>
                         <td><?php echo (int) $survey['expected_votes']; ?></td>
-                        <td><?php echo htmlspecialchars(formatRemainingTime($survey['expires_at'])); ?></td>
+                        <td>
+                            <?php if ((int) $survey['is_closed'] === 1): ?>
+                                geschlossen
+                            <?php else: ?>
+                                offen (<?php echo htmlspecialchars(formatRemainingTime($survey['expires_at'])); ?>)
+                            <?php endif; ?>
+                        </td>
                         <td>
                             <a href="survey.php?sid=<?php echo urlencode($survey['public_id']); ?>">
                                 Zur Umfrage

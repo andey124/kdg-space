@@ -21,7 +21,7 @@ if (!$survey) {
 $now = new DateTimeImmutable('now');
 $expiresAt = new DateTimeImmutable($survey['expires_at']);
 
-$isExpired = $now > $expiresAt;
+$isExpired = $now >= $expiresAt;
 
 // Alle Optionen laden
 $stmt = $pdo->prepare('SELECT * FROM choices WHERE survey_id = :survey_id ORDER BY id ASC');
@@ -34,8 +34,8 @@ $stmt->execute([':survey_id' => $survey['id']]);
 $totalVotes = (int) $stmt->fetchColumn();
 
 $expectedVotes = (int) $survey['expected_votes'];
-$isResultVisible = $totalVotes >= $expectedVotes;
-$isClosed = $isResultVisible || $isExpired;
+$isClosed = ($totalVotes >= $expectedVotes) || $isExpired;
+$isResultVisible = $isClosed;
 
 
 $sessionKey = 'survey_unlocked_' . $survey['id'];
@@ -229,11 +229,7 @@ if ($isResultVisible) {
         Stimmen bisher: <?php echo $totalVotes; ?> / <?php echo $expectedVotes; ?>
     </div>
 
-    <?php if ($isExpired): ?>
-        <p>Diese Umfrage ist abgelaufen. Es können keine Stimmen mehr abgegeben werden.</p>
-    <?php endif; ?>
-
-    <?php if (!$isUnlocked && !$isExpired): ?>
+    <?php if (!$isUnlocked): ?>
         <form action="survey.php?sid=<?php echo urlencode($publicId); ?>" method="post">
             <fieldset>
                 <legend>Umfrage entsperren</legend>
@@ -248,6 +244,10 @@ if ($isResultVisible) {
     <?php endif; ?>
 
     <?php if ($isUnlocked): ?>
+
+        <?php if ($isExpired): ?>
+            <p>Diese Umfrage ist abgelaufen. Es können keine Stimmen mehr abgegeben werden.</p>
+        <?php endif; ?>
 
         <?php if (!$isClosed && !$hasVoted): ?>
 
@@ -298,7 +298,7 @@ if ($isResultVisible) {
                 <?php endforeach; ?>
             </table>
         <?php else: ?>
-            <p>Die Ergebnisse werden angezeigt, sobald mindestens <?php echo $expectedVotes; ?> Stimmen abgegeben wurden.</p>
+            <p>Die Ergebnisse werden angezeigt, sobald <?php echo $expectedVotes; ?> Stimmen abgegeben wurden oder die Umfrage abläuft.</p>
         <?php endif; ?>
 
     <?php endif; ?>
