@@ -13,9 +13,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['admin_login'])) {
         $_SESSION['is_admin'] = true;
         header('Location: admin.php');
         exit;
-    } else {
-        $error = 'Falsches Passwort.';
     }
+    $error = 'Falsches Passwort.';
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['logout'])) {
@@ -25,7 +24,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['logout'])) {
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_survey']) && $_SESSION['is_admin']) {
-    $surveyId = (int)($_POST['survey_id'] ?? 0);
+    $surveyId = (int) ($_POST['survey_id'] ?? 0);
 
     $stmt = $pdo->prepare('DELETE FROM surveys WHERE id = :id');
     $stmt->execute([':id' => $surveyId]);
@@ -53,11 +52,12 @@ if ($_SESSION['is_admin']) {
     $surveys = $stmt->fetchAll();
 }
 
-function surveyStatus(array $survey): string {
+function surveyStatus(array $survey): string
+{
     $now = new DateTimeImmutable('now');
     $expiresAt = new DateTimeImmutable($survey['expires_at']);
-    $votes = (int)$survey['total_votes'];
-    $expected = (int)$survey['expected_votes'];
+    $votes = (int) $survey['total_votes'];
+    $expected = (int) $survey['expected_votes'];
 
     if ($votes >= $expected) {
         return 'geschlossen';
@@ -67,82 +67,119 @@ function surveyStatus(array $survey): string {
     }
     return 'aktiv';
 }
+
+function surveyStatusBadge(string $status): string
+{
+    if ($status === 'abgelaufen') {
+        return 'badge-expired';
+    }
+    if ($status === 'geschlossen') {
+        return 'badge-closed';
+    }
+    return 'badge-open';
+}
 ?>
 <!DOCTYPE html>
 <html lang="de">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Admin</title>
-    <style>
-        body { font-family: system-ui, sans-serif; margin: 2rem; max-width: 1100px; }
-        input[type="password"] { padding: 0.5rem; width: 300px; max-width: 100%; }
-        button { padding: 0.5rem 1rem; cursor: pointer; }
-        table { border-collapse: collapse; width: 100%; margin-top: 1.5rem; }
-        th, td { border: 1px solid #ddd; padding: 0.75rem; text-align: left; vertical-align: top; }
-        th { background: #f5f5f5; }
-        .error { color: darkred; margin-top: 0.75rem; }
-        .topbar { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; }
-        .danger { background: #a00; color: white; border: 0; }
-    </style>
+    <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-<div class="topbar">
-    <h1>Adminbereich</h1>
-    <p><a href="index.php">← Zur Übersicht</a></p>
-</div>
+<main class="page stack">
+    <header class="topbar reveal">
+        <h1>Adminbereich</h1>
+        <div class="actions">
+            <a class="button button-secondary" href="index.php">Zur Uebersicht</a>
+        </div>
+    </header>
 
 <?php if (!$_SESSION['is_admin']): ?>
-    <form method="post">
-        <input type="hidden" name="admin_login" value="1">
-        <label for="password">Admin-Passwort</label><br>
-        <input type="password" name="password" id="password" required>
-        <button type="submit">Einloggen</button>
-        <?php if ($error): ?>
-            <div class="error"><?php echo htmlspecialchars($error); ?></div>
-        <?php endif; ?>
-    </form>
+    <section class="card reveal reveal-delay-1">
+        <h2>Admin Login</h2>
+        <form method="post">
+            <input type="hidden" name="admin_login" value="1">
+            <div class="field">
+                <label for="password">Admin Passwort</label>
+                <input type="password" name="password" id="password" required>
+            </div>
+            <button type="submit">Einloggen</button>
+            <?php if ($error): ?>
+                <p class="notice notice-error"><?php echo htmlspecialchars($error); ?></p>
+            <?php endif; ?>
+        </form>
+    </section>
 <?php else: ?>
-    <form method="post" style="margin-bottom: 1rem;">
-        <input type="hidden" name="logout" value="1">
-        <button type="submit">Logout</button>
-    </form>
+    <section class="card">
+        <form method="post">
+            <input type="hidden" name="logout" value="1">
+            <button type="submit" class="button-secondary">Logout</button>
+        </form>
+    </section>
 
-    <table>
+    <section class="grid-cards">
+        <?php foreach ($surveys as $idx => $survey):
+            $status = surveyStatus($survey);
+            ?>
+            <article class="card survey-card reveal reveal-delay-<?php echo (($idx % 3) + 1); ?>">
+                <h3><?php echo htmlspecialchars($survey['question']); ?></h3>
+                <p class="muted">ID: <?php echo (int) $survey['id']; ?> | Start: <?php echo htmlspecialchars($survey['created_at']); ?></p>
+                <div class="survey-meta">
+                    <span class="badge"><?php echo (int) $survey['total_votes']; ?> / <?php echo (int) $survey['expected_votes']; ?> Stimmen</span>
+                    <span class="badge <?php echo surveyStatusBadge($status); ?>"><?php echo htmlspecialchars($status); ?></span>
+                </div>
+                <p class="muted">Gueltig bis: <?php echo htmlspecialchars($survey['expires_at']); ?></p>
+                <div class="actions">
+                    <a class="button button-secondary" href="survey.php?sid=<?php echo urlencode($survey['public_id']); ?>">Oeffnen</a>
+                    <form method="post" onsubmit="return confirm('Diese Umfrage wirklich loeschen?');">
+                        <input type="hidden" name="delete_survey" value="1">
+                        <input type="hidden" name="survey_id" value="<?php echo (int) $survey['id']; ?>">
+                        <button type="submit" class="button-danger">Loeschen</button>
+                    </form>
+                </div>
+            </article>
+        <?php endforeach; ?>
+    </section>
+
+    <table class="table-desktop" aria-label="Admin Desktop Tabelle">
         <thead>
-            <tr>
-                <th>ID</th>
-                <th>Frage</th>
-                <th>Stimmen</th>
-                <th>Ziel</th>
-                <th>Status</th>
-                <th>Gültig bis</th>
-                <th>Öffnen</th>
-                <th>Löschen</th>
-            </tr>
+        <tr>
+            <th>ID</th>
+            <th>Frage</th>
+            <th>Stimmen</th>
+            <th>Ziel</th>
+            <th>Status</th>
+            <th>Gueltig bis</th>
+            <th>Oeffnen</th>
+            <th>Loeschen</th>
+        </tr>
         </thead>
         <tbody>
-            <?php foreach ($surveys as $survey): ?>
-                <tr>
-                    <td><?php echo (int)$survey['id']; ?></td>
-                    <td><?php echo htmlspecialchars($survey['question']); ?></td>
-                    <td><?php echo (int)$survey['total_votes']; ?></td>
-                    <td><?php echo (int)$survey['expected_votes']; ?></td>
-                    <td><?php echo htmlspecialchars(surveyStatus($survey)); ?></td>
-                    <td><?php echo htmlspecialchars($survey['expires_at']); ?></td>
-                    <td>
-                        <a href="survey.php?sid=<?php echo urlencode($survey['public_id']); ?>">Öffnen</a>
-                    </td>
-                    <td>
-                        <form method="post" onsubmit="return confirm('Diese Umfrage wirklich löschen?');">
-                            <input type="hidden" name="delete_survey" value="1">
-                            <input type="hidden" name="survey_id" value="<?php echo (int)$survey['id']; ?>">
-                            <button type="submit" class="danger">Löschen</button>
-                        </form>
-                    </td>
-                </tr>
-            <?php endforeach; ?>
+        <?php foreach ($surveys as $survey):
+            $status = surveyStatus($survey);
+            ?>
+            <tr>
+                <td><?php echo (int) $survey['id']; ?></td>
+                <td><?php echo htmlspecialchars($survey['question']); ?></td>
+                <td><?php echo (int) $survey['total_votes']; ?></td>
+                <td><?php echo (int) $survey['expected_votes']; ?></td>
+                <td><?php echo htmlspecialchars($status); ?></td>
+                <td><?php echo htmlspecialchars($survey['expires_at']); ?></td>
+                <td><a href="survey.php?sid=<?php echo urlencode($survey['public_id']); ?>">Oeffnen</a></td>
+                <td>
+                    <form method="post" onsubmit="return confirm('Diese Umfrage wirklich loeschen?');">
+                        <input type="hidden" name="delete_survey" value="1">
+                        <input type="hidden" name="survey_id" value="<?php echo (int) $survey['id']; ?>">
+                        <button type="submit" class="button-danger">Loeschen</button>
+                    </form>
+                </td>
+            </tr>
+        <?php endforeach; ?>
         </tbody>
     </table>
 <?php endif; ?>
+</main>
 </body>
 </html>

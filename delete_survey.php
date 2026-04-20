@@ -14,13 +14,13 @@ $token = preg_replace('/[^a-f0-9]/', '', $token);
 
 if ($publicId === '' || $token === '') {
     http_response_code(400);
-    die('Ungültiger Löschlink.');
+    die('Ungueltiger Loeschlink.');
 }
 
 $expectedToken = generateDeleteToken($publicId, $adminPassword);
 if (!hash_equals($expectedToken, $token)) {
     http_response_code(403);
-    die('Ungültiger oder abgelaufener Löschlink.');
+    die('Ungueltiger oder abgelaufener Loeschlink.');
 }
 
 $stmt = $pdo->prepare('SELECT id, question FROM surveys WHERE public_id = :public_id');
@@ -29,7 +29,7 @@ $survey = $stmt->fetch();
 
 if (!$survey) {
     http_response_code(404);
-    die('Umfrage nicht gefunden oder bereits gelöscht.');
+    die('Umfrage nicht gefunden oder bereits geloescht.');
 }
 
 $deleteError = null;
@@ -54,7 +54,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_delete'])) {
         if ($pdo->inTransaction()) {
             $pdo->rollBack();
         }
-        $deleteError = 'Löschen fehlgeschlagen: ' . $e->getMessage();
+        $deleteError = 'Loeschen fehlgeschlagen: ' . $e->getMessage();
     }
 }
 ?>
@@ -63,64 +63,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_delete'])) {
 
 <head>
     <meta charset="UTF-8">
-    <title>Umfrage löschen</title>
-    <style>
-        body {
-            font-family: system-ui, sans-serif;
-            margin: 2rem;
-            max-width: 700px;
-        }
-
-        .panel {
-            border: 1px solid #ddd;
-            padding: 1rem;
-            border-radius: 8px;
-            background: #fafafa;
-        }
-
-        .danger {
-            background: #a00;
-            color: #fff;
-            border: 0;
-            padding: 0.6rem 1rem;
-            border-radius: 6px;
-            cursor: pointer;
-        }
-
-        .muted {
-            color: #555;
-        }
-
-        .error {
-            color: darkred;
-            margin-top: 1rem;
-        }
-    </style>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Umfrage loeschen</title>
+    <link rel="stylesheet" href="styles.css">
 </head>
 
 <body>
+<main class="page stack">
     <?php if ($wasDeleted): ?>
-        <h1>Umfrage wurde gelöscht</h1>
-        <p>Die Umfrage wurde erfolgreich entfernt.</p>
-        <p><a href="index.php">Zur Übersicht</a></p>
+        <section class="card reveal">
+            <h1>Umfrage wurde geloescht</h1>
+            <p class="notice notice-success">Die Umfrage wurde erfolgreich entfernt.</p>
+            <a class="button button-secondary" href="index.php">Zur Uebersicht</a>
+        </section>
     <?php else: ?>
-        <h1>Umfrage löschen</h1>
-        <div class="panel">
-            <p>Du bist dabei, folgende Umfrage zu löschen:</p>
-            <p><strong><?php echo htmlspecialchars($survey['question']); ?></strong></p>
-            <p class="muted">Dieser Vorgang kann nicht rückgängig gemacht werden.</p>
+        <section class="card reveal">
+            <h1>Umfrage loeschen</h1>
+            <p>Du bist dabei, folgende Umfrage zu loeschen:</p>
+            <h2><?php echo htmlspecialchars($survey['question']); ?></h2>
+            <p class="notice notice-error">Dieser Vorgang kann nicht rueckgaengig gemacht werden.</p>
 
-            <form method="post" action="delete_survey.php?sid=<?php echo urlencode($publicId); ?>&token=<?php echo urlencode($token); ?>">
+            <form method="post" action="delete_survey.php?sid=<?php echo urlencode($publicId); ?>&token=<?php echo urlencode($token); ?>" class="actions sticky-mobile">
                 <input type="hidden" name="confirm_delete" value="1">
-                <button class="danger" type="submit">Ja, sicher löschen</button>
-                <a href="index.php" style="margin-left: 0.8rem;">Abbrechen</a>
+                <button class="button-danger" type="submit">Ja, sicher loeschen</button>
+                <a class="button button-secondary" href="index.php">Abbrechen</a>
             </form>
 
             <?php if ($deleteError): ?>
-                <div class="error"><?php echo htmlspecialchars($deleteError); ?></div>
+                <p class="notice notice-error"><?php echo htmlspecialchars($deleteError); ?></p>
             <?php endif; ?>
-        </div>
+        </section>
     <?php endif; ?>
+</main>
 </body>
 
 </html>

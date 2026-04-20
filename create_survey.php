@@ -1,5 +1,4 @@
 <?php
-// create_survey.php
 require __DIR__ . '/private/config.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
@@ -32,20 +31,37 @@ if ($expectedVotes < 1) {
 }
 
 if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-    $errors[] = 'Bitte eine gültige E-Mail-Adresse angeben.';
+    $errors[] = 'Bitte eine gueltige E-Mail-Adresse angeben.';
 }
 
 if ($errors) {
-    echo '<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8"><title>Fehler</title></head><body>';
-    echo '<h1>Fehler beim Anlegen der Umfrage</h1><ul>';
-    foreach ($errors as $e) {
-        echo '<li>' . htmlspecialchars($e) . '</li>';
-    }
-    echo '</ul><p><a href="index.php">Zurück</a></p></body></html>';
+    ?>
+    <!DOCTYPE html>
+    <html lang="de">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Fehler beim Anlegen</title>
+        <link rel="stylesheet" href="styles.css">
+    </head>
+    <body>
+    <main class="page stack">
+        <a class="button button-secondary" href="create.php">Zurueck zum Formular</a>
+        <section class="card">
+            <h1>Fehler beim Anlegen der Umfrage</h1>
+            <ul>
+                <?php foreach ($errors as $e): ?>
+                    <li><?php echo htmlspecialchars($e); ?></li>
+                <?php endforeach; ?>
+            </ul>
+        </section>
+    </main>
+    </body>
+    </html>
+    <?php
     exit;
 }
 
-// public_id erzeugen
 function generatePublicId(): string
 {
     return bin2hex(random_bytes(8));
@@ -56,11 +72,8 @@ function generateDeleteToken(string $publicId, string $secret): string
     return hash_hmac('sha256', 'delete-survey:' . $publicId, $secret);
 }
 
-// 4-stelliger PIN
 $pin = str_pad((string) random_int(0, 9999), 4, '0', STR_PAD_LEFT);
-
-// PIN hashen (bcrypt/DEFAULT)
-$pinHash = password_hash($pin, PASSWORD_DEFAULT); // [web:9]
+$pinHash = password_hash($pin, PASSWORD_DEFAULT);
 
 $publicId = generatePublicId();
 $now = new DateTimeImmutable('now');
@@ -85,9 +98,7 @@ try {
 
     $surveyId = (int) $pdo->lastInsertId();
 
-    $stmtChoice = $pdo->prepare('
-        INSERT INTO choices (survey_id, choice_text) VALUES (:survey_id, :choice_text)
-    ');
+    $stmtChoice = $pdo->prepare('INSERT INTO choices (survey_id, choice_text) VALUES (:survey_id, :choice_text)');
     foreach ($choices as $choice) {
         $stmtChoice->execute([
             ':survey_id' => $surveyId,
@@ -100,21 +111,21 @@ try {
     $pdo->rollBack();
     die('Fehler beim Speichern der Umfrage: ' . htmlspecialchars($e->getMessage()));
 }
+
 $surveyUrl = $baseUrl . '/survey.php?sid=' . urlencode($publicId);
 $deleteToken = generateDeleteToken($publicId, $adminPassword);
 $deleteUrl = $baseUrl . '/delete_survey.php?sid=' . urlencode($publicId) . '&token=' . urlencode($deleteToken);
 
-// Bestätigungsmail an den Ersteller
 $subject = 'Deine Umfrage wurde erstellt';
 $message =
     "Hallo,\n\n" .
     "deine Umfrage wurde erfolgreich angelegt.\n\n" .
     "Frage: " . $question . "\n" .
     "Umfragelink: " . $surveyUrl . "\n" .
-    "Löschlink (einzigartig): " . $deleteUrl . "\n" .
-    "Nach dem Öffnen muss die Löschung noch einmal bestätigt werden.\n" .
+    "Loeschlink (einzigartig): " . $deleteUrl . "\n" .
+    "Nach dem Oeffnen muss die Loeschung noch einmal bestaetigt werden.\n" .
     "PIN zum Entsperren: " . $pin . "\n" .
-    "Gültig bis: " . $expiresAt->format('Y-m-d H:i:s') . "\n\n" .
+    "Gueltig bis: " . $expiresAt->format('Y-m-d H:i:s') . "\n\n" .
     "Bitte bewahre diese E-Mail gut auf.\n";
 
 $headers =
@@ -130,38 +141,34 @@ $headers =
 
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Umfrage erstellt</title>
-    <style>
-        body {
-            font-family: system-ui, sans-serif;
-            margin: 2rem;
-            max-width: 700px;
-        }
-
-        code {
-            background: #f4f4f4;
-            padding: 0.2rem 0.4rem;
-        }
-    </style>
+    <link rel="stylesheet" href="styles.css">
 </head>
 
 <body>
-    <h1>Umfrage erfolgreich erstellt</h1>
+<main class="page stack">
+    <section class="card reveal">
+        <h1>Umfrage erfolgreich erstellt</h1>
 
-    <p><strong>Umfragelink (an Teilnehmende weitergeben):</strong></p>
-    <p><code><?php echo htmlspecialchars($surveyUrl); ?></code></p>
+        <p><strong>Umfragelink (an Teilnehmende weitergeben):</strong></p>
+        <p><a href="<?php echo htmlspecialchars($surveyUrl); ?>"><?php echo htmlspecialchars($surveyUrl); ?></a></p>
 
-    <p><strong>PIN (4-stellig, zum Entsperren der Umfrage):</strong></p>
-    <p><code><?php echo htmlspecialchars($pin); ?></code></p>
+        <p><strong>PIN (4-stellig, zum Entsperren der Umfrage):</strong></p>
+        <p><?php echo htmlspecialchars($pin); ?></p>
 
-    <p><strong>Einzigartiger Löschlink:</strong></p>
-    <p><code><?php echo htmlspecialchars($deleteUrl); ?></code></p>
-    <p>Nach dem Öffnen muss die Löschung noch einmal mit „Ja, sicher löschen“ bestätigt werden.</p>
+        <p><strong>Einzigartiger Loeschlink:</strong></p>
+        <p><a href="<?php echo htmlspecialchars($deleteUrl); ?>"><?php echo htmlspecialchars($deleteUrl); ?></a></p>
+        <p class="muted">Nach dem Oeffnen muss die Loeschung noch einmal bestaetigt werden.</p>
 
-    <p>Bitte speichere den PIN sicher. Er wird aus Sicherheitsgründen nur hier im Klartext angezeigt.</p>
+        <p class="muted">Bitte speichere den PIN sicher. Er wird aus Sicherheitsgruenden nur hier im Klartext angezeigt.</p>
 
-    <p><a href="create.php">Weitere Umfrage anlegen</a></p>
-    <p><a href="index.php">Zur Übersicht aller laufenden Umfragen</a></p>
+        <div class="actions sticky-mobile">
+            <a class="button button-primary" href="create.php">Weitere Umfrage anlegen</a>
+            <a class="button button-secondary" href="index.php">Zur Uebersicht aller laufenden Umfragen</a>
+        </div>
+    </section>
+</main>
 </body>
 
 </html>

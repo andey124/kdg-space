@@ -1,8 +1,6 @@
 <?php
 require __DIR__ . '/private/config.php';
 
-$now = new DateTimeImmutable('now');
-
 $stmt = $pdo->query("
     SELECT
         s.id,
@@ -45,116 +43,117 @@ function formatRemainingTime(string $expiresAtRaw): string
 
     return sprintf('%d Min.', max(1, $diff->i));
 }
+
+function statusBadgeClass(array $survey): string
+{
+    $now = new DateTimeImmutable('now');
+    $expiresAt = new DateTimeImmutable($survey['expires_at']);
+    $isExpired = $now >= $expiresAt;
+
+    if ($isExpired) {
+        return 'badge-expired';
+    }
+
+    if ((int) $survey['is_closed'] === 1) {
+        return 'badge-closed';
+    }
+
+    return 'badge-open';
+}
+
+function statusText(array $survey): string
+{
+    $now = new DateTimeImmutable('now');
+    $expiresAt = new DateTimeImmutable($survey['expires_at']);
+    $isExpired = $now >= $expiresAt;
+
+    if ($isExpired) {
+        return 'abgelaufen';
+    }
+
+    if ((int) $survey['is_closed'] === 1) {
+        return 'geschlossen';
+    }
+
+    return 'offen (' . formatRemainingTime($survey['expires_at']) . ')';
+}
 ?>
 <!DOCTYPE html>
 <html lang="de">
 
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Umfragen</title>
-    <style>
-        body {
-            font-family: system-ui, sans-serif;
-            margin: 2rem;
-            max-width: 1000px;
-        }
-
-        .topbar {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 1rem;
-            margin-bottom: 2rem;
-            flex-wrap: wrap;
-        }
-
-        .button {
-            display: inline-block;
-            padding: 0.65rem 1rem;
-            background: #111;
-            color: #fff;
-            text-decoration: none;
-            border-radius: 8px;
-        }
-
-        table {
-            border-collapse: collapse;
-            width: 100%;
-        }
-
-        th,
-        td {
-            border: 1px solid #ddd;
-            padding: 0.75rem;
-            text-align: left;
-            vertical-align: top;
-        }
-
-        th {
-            background: #f5f5f5;
-        }
-
-        .muted {
-            color: #666;
-            font-size: 0.95rem;
-        }
-    </style>
+    <link rel="stylesheet" href="styles.css">
 </head>
 
 <body>
-    <div class="topbar">
-        <div>
-            <h1>Umfragen</h1>
-            <div class="muted">Öffentliche Übersicht aller Abstimmungen</div>
-        </div>
-        <div style="display:flex; gap:0.75rem; flex-wrap:wrap;">
-            <a class="button" href="create.php">Neue Umfrage anlegen</a>
-            <a class="button" href="admin.php">Admin</a>
-        </div>
+    <main class="page">
+        <header class="topbar reveal">
+            <div>
+                <h1>Umfragen</h1>
+                <p class="hero-intro">Oeffentliche Uebersicht aller Abstimmungen</p>
+                <span class="inline-chip">Mobil optimiert</span>
+            </div>
+            <div class="actions">
+                <a class="button button-primary" href="create.php">Neue Umfrage</a>
+                <a class="button button-secondary" href="admin.php">Admin</a>
+            </div>
+        </header>
 
-    </div>
+        <?php if (!$surveys): ?>
+            <section class="card reveal reveal-delay-1">
+                <p>Aktuell gibt es keine Umfragen.</p>
+            </section>
+        <?php else: ?>
+            <section class="grid-cards">
+                <?php foreach ($surveys as $idx => $survey): ?>
+                    <article class="card survey-card reveal reveal-delay-<?php echo (($idx % 3) + 1); ?>">
+                        <h2><?php echo htmlspecialchars($survey['question']); ?></h2>
+                        <p class="muted">Gestartet: <?php echo htmlspecialchars($survey['created_at']); ?></p>
 
-    <?php if (!$surveys): ?>
-        <p>Aktuell gibt es keine Umfragen.</p>
-    <?php else: ?>
-        <table>
-            <thead>
-                <tr>
-                    <th>Umfrage</th>
-                    <th>Stimmen</th>
-                    <th>Ziel</th>
-                    <th>Status</th>
-                    <th>Öffnen</th>
-                </tr>
-            </thead>
-            <tbody>
-                <?php foreach ($surveys as $survey): ?>
-                    <tr>
-                        <td>
-                            <?php echo htmlspecialchars($survey['question']); ?>
-                            <div class="muted">
-                                gestartet: <?php echo htmlspecialchars($survey['created_at']); ?>
-                            </div>
-                        </td>
-                        <td><?php echo (int) $survey['total_votes']; ?></td>
-                        <td><?php echo (int) $survey['expected_votes']; ?></td>
-                        <td>
-                            <?php if ((int) $survey['is_closed'] === 1): ?>
-                                geschlossen
-                            <?php else: ?>
-                                offen (<?php echo htmlspecialchars(formatRemainingTime($survey['expires_at'])); ?>)
-                            <?php endif; ?>
-                        </td>
-                        <td>
-                            <a href="survey.php?sid=<?php echo urlencode($survey['public_id']); ?>">
-                                Zur Umfrage
-                            </a>
-                        </td>
-                    </tr>
+                        <div class="survey-meta">
+                            <span class="badge <?php echo statusBadgeClass($survey); ?>">
+                                <?php echo htmlspecialchars(statusText($survey)); ?>
+                            </span>
+                            <span class="badge"><?php echo (int) $survey['total_votes']; ?> / <?php echo (int) $survey['expected_votes']; ?> Stimmen</span>
+                        </div>
+
+                        <a class="button button-primary" href="survey.php?sid=<?php echo urlencode($survey['public_id']); ?>">Zur Umfrage</a>
+                    </article>
                 <?php endforeach; ?>
-            </tbody>
-        </table>
-    <?php endif; ?>
+            </section>
+
+            <table class="table-desktop" aria-label="Umfragen Desktop Ansicht">
+                <thead>
+                    <tr>
+                        <th>Umfrage</th>
+                        <th>Stimmen</th>
+                        <th>Ziel</th>
+                        <th>Status</th>
+                        <th>Oeffnen</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($surveys as $survey): ?>
+                        <tr>
+                            <td>
+                                <?php echo htmlspecialchars($survey['question']); ?>
+                                <div class="muted">gestartet: <?php echo htmlspecialchars($survey['created_at']); ?></div>
+                            </td>
+                            <td><?php echo (int) $survey['total_votes']; ?></td>
+                            <td><?php echo (int) $survey['expected_votes']; ?></td>
+                            <td><?php echo htmlspecialchars(statusText($survey)); ?></td>
+                            <td>
+                                <a href="survey.php?sid=<?php echo urlencode($survey['public_id']); ?>">Zur Umfrage</a>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        <?php endif; ?>
+    </main>
 </body>
 
 </html>

@@ -1,15 +1,13 @@
 <?php
-// survey.php
 require __DIR__ . '/private/config.php';
 
 $publicId = $_GET['sid'] ?? '';
-$publicId = preg_replace('/[^a-f0-9]/', '', $publicId); // einfache Sanitization
+$publicId = preg_replace('/[^a-f0-9]/', '', $publicId);
 
 if ($publicId === '') {
-    die('Ungültige Umfrage-ID.');
+    die('Ungueltige Umfrage-ID.');
 }
 
-// Umfrage laden
 $stmt = $pdo->prepare('SELECT * FROM surveys WHERE public_id = :public_id');
 $stmt->execute([':public_id' => $publicId]);
 $survey = $stmt->fetch();
@@ -20,15 +18,12 @@ if (!$survey) {
 
 $now = new DateTimeImmutable('now');
 $expiresAt = new DateTimeImmutable($survey['expires_at']);
-
 $isExpired = $now >= $expiresAt;
 
-// Alle Optionen laden
 $stmt = $pdo->prepare('SELECT * FROM choices WHERE survey_id = :survey_id ORDER BY id ASC');
 $stmt->execute([':survey_id' => $survey['id']]);
 $choices = $stmt->fetchAll();
 
-// Anzahl Stimmen
 $stmt = $pdo->prepare('SELECT COUNT(*) AS cnt FROM votes WHERE survey_id = :survey_id');
 $stmt->execute([':survey_id' => $survey['id']]);
 $totalVotes = (int) $stmt->fetchColumn();
@@ -37,15 +32,12 @@ $expectedVotes = (int) $survey['expected_votes'];
 $isClosed = ($totalVotes >= $expectedVotes) || $isExpired;
 $isResultVisible = $isClosed;
 
-
 $sessionKey = 'survey_unlocked_' . $survey['id'];
 $isUnlocked = !empty($_SESSION[$sessionKey]);
 
-// Prüfen, ob User bereits abgestimmt hat (cookie)
 $voteCookieName = 'voted_' . $publicId;
 $hasVoted = !empty($_COOKIE[$voteCookieName]);
 
-// PIN-Formular verarbeiten
 $pinError = null;
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['pin'])) {
     $enteredPin = trim($_POST['pin']);
@@ -56,17 +48,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['pin'])) {
     } else {
         if (password_verify($enteredPin, $survey['pin_hash'])) {
             $_SESSION[$sessionKey] = true;
-            $isUnlocked = true;
-            // Redirect nach POST (PRG-Pattern)
             header('Location: survey.php?sid=' . urlencode($publicId));
             exit;
-        } else {
-            $pinError = 'PIN ist ungültig.';
         }
+        $pinError = 'PIN ist ungueltig.';
     }
 }
 
-// Abstimmung verarbeiten
 $voteError = null;
 $voteSuccess = false;
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['choice_id']) && $isUnlocked && !$isClosed) {
@@ -75,13 +63,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['choice_id']) && $isUn
     } else {
         $choiceId = (int) $_POST['choice_id'];
 
-        // Gehört die Choice wirklich zu dieser Umfrage?
         $stmt = $pdo->prepare('SELECT COUNT(*) FROM choices WHERE id = :id AND survey_id = :survey_id');
         $stmt->execute([':id' => $choiceId, ':survey_id' => $survey['id']]);
         $exists = (int) $stmt->fetchColumn() > 0;
 
         if (!$exists) {
-            $voteError = 'Ungültige Auswahl.';
+            $voteError = 'Ungueltige Auswahl.';
         } else {
             $stmt = $pdo->prepare('SELECT COUNT(*) FROM votes WHERE survey_id = :survey_id');
             $stmt->execute([':survey_id' => $survey['id']]);
@@ -90,10 +77,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['choice_id']) && $isUn
             if ($currentVotes >= $expectedVotes) {
                 $voteError = 'Diese Umfrage ist bereits geschlossen.';
             } else {
-                $stmt = $pdo->prepare('
-        INSERT INTO votes (survey_id, choice_id, created_at)
-        VALUES (:survey_id, :choice_id, :created_at)
-    ');
+                $stmt = $pdo->prepare('INSERT INTO votes (survey_id, choice_id, created_at) VALUES (:survey_id, :choice_id, :created_at)');
                 $stmt->execute([
                     ':survey_id' => $survey['id'],
                     ':choice_id' => $choiceId,
@@ -107,6 +91,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['choice_id']) && $isUn
                     'httponly' => false,
                     'samesite' => 'Lax',
                 ]);
+
                 $hasVoted = true;
                 $voteSuccess = true;
 
@@ -120,7 +105,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['choice_id']) && $isUn
                         "deine Umfrage \"" . $survey['question'] . "\" hat die erwartete Anzahl von {$expectedVotes} Stimmen erreicht.\n" .
                         "Du kannst die Ergebnisse hier ansehen:\n" .
                         $baseUrl . '/survey.php?sid=' . $publicId . "\n\n" .
-                        "Viele Grüße\nDeine Umfrageplattform";
+                        "Viele Gruesse\nDeine Umfrageplattform";
 
                     $headers = 'From: ' . $fromEmail . "\r\n" .
                         'Content-Type: text/plain; charset=UTF-8';
@@ -140,7 +125,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['choice_id']) && $isUn
     }
 }
 
-// Ergebnistabelle laden (nur, wenn sichtbar)
 $results = [];
 if ($isResultVisible) {
     $stmt = $pdo->prepare('
@@ -154,167 +138,130 @@ if ($isResultVisible) {
     $stmt->execute([':survey_id' => $survey['id']]);
     $results = $stmt->fetchAll();
 }
+
+$statusText = 'Offen';
+$statusClass = 'badge-open';
+if ($isExpired) {
+    $statusText = 'Abgelaufen';
+    $statusClass = 'badge-expired';
+} elseif ($isClosed) {
+    $statusText = 'Geschlossen';
+    $statusClass = 'badge-closed';
+}
 ?>
 <!DOCTYPE html>
 <html lang="de">
 
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Umfrage: <?php echo htmlspecialchars($survey['question']); ?></title>
-    <style>
-        body {
-            font-family: system-ui, sans-serif;
-            margin: 2rem;
-            max-width: 700px;
-        }
-
-        h1 {
-            margin-bottom: 0.5rem;
-        }
-
-        .meta {
-            color: #555;
-            font-size: 0.9rem;
-            margin-bottom: 1rem;
-        }
-
-        .error {
-            color: darkred;
-            margin-top: 0.5rem;
-        }
-
-        .success {
-            color: darkgreen;
-            margin-top: 0.5rem;
-        }
-
-        fieldset {
-            border: 1px solid #ddd;
-            padding: 1rem;
-        }
-
-        legend {
-            font-weight: 600;
-        }
-
-        button {
-            margin-top: 1rem;
-            padding: 0.5rem 1.2rem;
-            cursor: pointer;
-        }
-
-        .back-link {
-            display: inline-block;
-            margin-bottom: 1rem;
-            padding: 0.5rem 0.9rem;
-            background: #111;
-            color: #fff;
-            text-decoration: none;
-            border-radius: 6px;
-        }
-
-        table {
-            border-collapse: collapse;
-            width: 100%;
-            margin-top: 1rem;
-        }
-
-        th,
-        td {
-            border: 1px solid #ddd;
-            padding: 0.4rem 0.6rem;
-            text-align: left;
-        }
-
-        th {
-            background: #f4f4f4;
-        }
-    </style>
+    <link rel="stylesheet" href="styles.css">
 </head>
 
 <body>
-    <a class="back-link" href="index.php">Zur Übersicht</a>
+    <main class="page stack">
+        <a class="button button-secondary" href="index.php">Zur Uebersicht</a>
 
-    <h1><?php echo htmlspecialchars($survey['question']); ?></h1>
-    <div class="meta">
-        Gültig bis: <?php echo htmlspecialchars($survey['expires_at']); ?><br>
-        Stimmen bisher: <?php echo $totalVotes; ?> / <?php echo $expectedVotes; ?>
-    </div>
+        <section class="card reveal">
+            <h1><?php echo htmlspecialchars($survey['question']); ?></h1>
+            <div class="survey-meta">
+                <span class="badge <?php echo $statusClass; ?>"><?php echo $statusText; ?></span>
+                <span class="badge">Stimmen: <?php echo $totalVotes; ?> / <?php echo $expectedVotes; ?></span>
+                <span class="badge">Gueltig bis: <?php echo htmlspecialchars($survey['expires_at']); ?></span>
+            </div>
+        </section>
 
-    <?php if (!$isUnlocked): ?>
-        <form action="survey.php?sid=<?php echo urlencode($publicId); ?>" method="post">
-            <fieldset>
-                <legend>Umfrage entsperren</legend>
-                <label for="pin">PIN (4 Ziffern):</label>
-                <input type="text" id="pin" name="pin" maxlength="4" pattern="\d{4}" required>
-                <button type="submit">Entsperren</button>
-                <?php if ($pinError): ?>
-                    <div class="error"><?php echo htmlspecialchars($pinError); ?></div>
-                <?php endif; ?>
-            </fieldset>
-        </form>
-    <?php endif; ?>
-
-    <?php if ($isUnlocked): ?>
-
-        <?php if ($isExpired): ?>
-            <p>Diese Umfrage ist abgelaufen. Es können keine Stimmen mehr abgegeben werden.</p>
+        <?php if (!$isUnlocked): ?>
+            <section class="card reveal reveal-delay-1">
+                <h2>Umfrage entsperren</h2>
+                <form action="survey.php?sid=<?php echo urlencode($publicId); ?>" method="post">
+                    <div class="field">
+                        <label for="pin">PIN (4 Ziffern)</label>
+                        <input type="text" id="pin" name="pin" maxlength="4" pattern="\d{4}" inputmode="numeric" autocomplete="one-time-code" required>
+                    </div>
+                    <div class="actions sticky-mobile">
+                        <button type="submit">Entsperren</button>
+                    </div>
+                    <?php if ($pinError): ?>
+                        <p class="notice notice-error"><?php echo htmlspecialchars($pinError); ?></p>
+                    <?php endif; ?>
+                </form>
+            </section>
         <?php endif; ?>
 
-        <?php if (!$isClosed && !$hasVoted): ?>
+        <?php if ($isUnlocked): ?>
+            <?php if ($isExpired): ?>
+                <section class="card">
+                    <p class="notice notice-error">Diese Umfrage ist abgelaufen. Es koennen keine Stimmen mehr abgegeben werden.</p>
+                </section>
+            <?php endif; ?>
 
-            <form action="survey.php?sid=<?php echo urlencode($publicId); ?>" method="post">
-                <fieldset>
-                    <legend>Jetzt abstimmen</legend>
-                    <?php foreach ($choices as $choice): ?>
-                        <div>
-                            <label>
-                                <input type="radio" name="choice_id" value="<?php echo (int) $choice['id']; ?>" required>
-                                <?php echo htmlspecialchars($choice['choice_text']); ?>
-                            </label>
+            <?php if (!$isClosed && !$hasVoted): ?>
+                <section class="card reveal reveal-delay-1">
+                    <h2>Jetzt abstimmen</h2>
+                    <form action="survey.php?sid=<?php echo urlencode($publicId); ?>" method="post" class="stack">
+                        <?php foreach ($choices as $choice): ?>
+                            <div class="option-item">
+                                <label>
+                                    <input type="radio" name="choice_id" value="<?php echo (int) $choice['id']; ?>" required>
+                                    <span><?php echo htmlspecialchars($choice['choice_text']); ?></span>
+                                </label>
+                            </div>
+                        <?php endforeach; ?>
+
+                        <div class="actions sticky-mobile">
+                            <button type="submit">Stimme abgeben</button>
                         </div>
-                    <?php endforeach; ?>
-                    <button type="submit">Stimme abgeben</button>
-                    <?php if ($voteError): ?>
-                        <div class="error"><?php echo htmlspecialchars($voteError); ?></div>
-                    <?php endif; ?>
-                    <?php if ($voteSuccess): ?>
-                        <div class="success">Danke für deine Stimme!</div>
-                    <?php endif; ?>
-                </fieldset>
-            </form>
-        <?php elseif ($hasVoted): ?>
-            <p>Du hast bereits an dieser Umfrage teilgenommen.</p>
+
+                        <?php if ($voteError): ?>
+                            <p class="notice notice-error"><?php echo htmlspecialchars($voteError); ?></p>
+                        <?php endif; ?>
+
+                        <?php if ($voteSuccess): ?>
+                            <p class="notice notice-success">Danke fuer deine Stimme!</p>
+                        <?php endif; ?>
+                    </form>
+                </section>
+            <?php elseif ($hasVoted): ?>
+                <section class="card">
+                    <p class="notice notice-success">Du hast bereits an dieser Umfrage teilgenommen.</p>
+                </section>
+            <?php endif; ?>
+
+            <?php if ($isClosed && !$isExpired && !$hasVoted): ?>
+                <section class="card">
+                    <p>Diese Umfrage ist geschlossen, weil die Zielanzahl an Stimmen erreicht wurde.</p>
+                </section>
+            <?php endif; ?>
+
+            <?php if ($isResultVisible): ?>
+                <section class="card reveal reveal-delay-2">
+                    <h2>Ergebnisse</h2>
+                    <div class="results">
+                        <?php foreach ($results as $row):
+                            $votes = (int) $row['votes'];
+                            $percent = $totalVotes > 0 ? round($votes * 100 / $totalVotes, 1) : 0;
+                            ?>
+                            <article class="result-row">
+                                <div class="result-top">
+                                    <span><?php echo htmlspecialchars($row['choice_text']); ?></span>
+                                    <span><?php echo $votes; ?> Stimmen (<?php echo $percent; ?> %)</span>
+                                </div>
+                                <div class="progress" aria-hidden="true">
+                                    <div class="progress-bar" style="width: <?php echo max(0, min(100, $percent)); ?>%;"></div>
+                                </div>
+                            </article>
+                        <?php endforeach; ?>
+                    </div>
+                </section>
+            <?php else: ?>
+                <section class="card">
+                    <p>Die Ergebnisse werden angezeigt, sobald <?php echo $expectedVotes; ?> Stimmen abgegeben wurden oder die Umfrage ablaeuft.</p>
+                </section>
+            <?php endif; ?>
         <?php endif; ?>
-
-        <?php if ($isClosed && !$isExpired && !$hasVoted): ?>
-            <p>Diese Umfrage ist geschlossen, weil die Zielanzahl an Stimmen erreicht wurde.</p>
-        <?php endif; ?>
-
-        <?php if ($isResultVisible): ?>
-            <h2>Ergebnisse</h2>
-            <table>
-                <tr>
-                    <th>Option</th>
-                    <th>Stimmen</th>
-                    <th>Prozent</th>
-                </tr>
-                <?php foreach ($results as $row):
-                    $percent = $totalVotes > 0 ? round($row['votes'] * 100 / $totalVotes, 1) : 0;
-                    ?>
-                    <tr>
-                        <td><?php echo htmlspecialchars($row['choice_text']); ?></td>
-                        <td><?php echo (int) $row['votes']; ?></td>
-                        <td><?php echo $percent; ?> %</td>
-                    </tr>
-                <?php endforeach; ?>
-            </table>
-        <?php else: ?>
-            <p>Die Ergebnisse werden angezeigt, sobald <?php echo $expectedVotes; ?> Stimmen abgegeben wurden oder die Umfrage abläuft.</p>
-        <?php endif; ?>
-
-    <?php endif; ?>
-
+    </main>
 </body>
 
 </html>
